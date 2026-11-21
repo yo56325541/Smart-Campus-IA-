@@ -1,0 +1,45 @@
+# ==== Secrets & Environment ====
+.env
+*.env
+!.env.example
+
+# ==== Python ====
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# ==== Database files ====
+test.db
+*.db
+*.sqlite
+*.sqlite3
+
+# ==== Test & Coverage ====
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+*.cover
+
+# ==== Alembic (do NOT ignore versions!) ====
+# (alembic/versions/*.py should be committed)
+
+# ==== IDE & OS ====
+.vscode/
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ==== Logs ====
+*.log
+logs/
