@@ -1,0 +1,235 @@
+{
+  "task": "SA-32",
+  "title": "Préparer les questions pour évaluer les LLM",
+  "language_priority": "fr",
+  "description": "Jeu de requêtes pour évaluer les réponses du LLM concernant l'admission, l'orientation, les reformulations et les cas ambigus.",
+  "questions": [
+    {
+      "id": "ADM-001",
+      "category": "admission",
+      "language": "fr",
+      "query": "Quelles sont les conditions d'admission pour intégrer une formation en informatique ?",
+      "expected_behavior": "Présenter les conditions disponibles dans les sources officielles et demander le nom de la formation si nécessaire.",
+      "evaluation_criteria": [
+        "Exactitude des informations",
+        "Utilisation des sources officielles",
+        "Absence d'informations inventées"
+      ]
+    },
+    {
+      "id": "ADM-002",
+      "category": "admission",
+      "language": "fr",
+      "query": "Quels documents dois-je préparer pour déposer une candidature ?",
+      "expected_behavior": "Fournir la liste des documents uniquement si elle est disponible dans les sources officielles.",
+      "evaluation_criteria": [
+        "Pertinence de la réponse",
+        "Exhaustivité des documents disponibles",
+        "Fiabilité des informations"
+      ]
+    },
+    {
+      "id": "ADM-003",
+      "category": "admission",
+      "language": "fr",
+      "query": "Quelle est la date limite pour déposer mon dossier de candidature ?",
+      "expected_behavior": "Indiquer la date limite à partir des informations officielles ou préciser qu'elle n'est pas disponible.",
+      "evaluation_criteria": [
+        "Exactitude de la date",
+        "Respect des informations disponibles",
+        "Absence de date inventée"
+      ]
+    },
+    {
+      "id": "ADM-004",
+      "category": "admission",
+      "language": "fr",
+      "query": "Quels sont les frais de scolarité de cette formation ?",
+      "expected_behavior": "Demander le nom de la formation si le contexte est insuffisant, puis consulter les tarifs officiels.",
+      "evaluation_criteria": [
+        "Compréhension de la demande",
+        "Exactitude des tarifs",
+        "Gestion du contexte manquant"
+      ]
+    },
+    {
+      "id": "ADM-005",
+      "category": "admission",
+      "language": "fr",
+      "query": "Avec mon diplôme actuel, suis-je éligible à cette formation ?",
+      "expected_behavior": "Demander des précisions sur le diplôme et la formation, puis vérifier les conditions d'admission officielles.",
+      "evaluation_criteria": [
+        "Identification des informations manquantes",
+        "Respect des conditions officielles",
+        "Clarté de la réponse"
+      ]
+    },
+    {
+      "id": "ORI-001",
+      "category": "orientation",
+      "language": "fr",
+      "query": "Je suis titulaire d'un baccalauréat scientifique et je souhaite poursuivre des études en informatique. Quelles formations pourraient correspondre à mon profil ?",
+      "expected_behavior": "Identifier les formations pertinentes dans le catalogue et expliquer leur adéquation avec le profil.",
+      "evaluation_criteria": [
+        "Pertinence des recommandations",
+        "Prise en compte du profil",
+        "Cohérence avec le catalogue"
+      ]
+    },
+    {
+      "id": "ORI-002",
+      "category": "orientation",
+      "language": "fr",
+      "query": "J'aime la programmation et la résolution de problèmes. Quelle spécialité pourriez-vous me conseiller ?",
+      "expected_behavior": "Proposer des pistes d'orientation à partir des formations disponibles et demander des précisions si nécessaire.",
+      "evaluation_criteria": [
+        "Personnalisation du conseil",
+        "Pertinence des formations proposées",
+        "Justification des recommandations"
+      ]
+    },
+    {
+      "id": "ORI-003",
+      "category": "orientation",
+      "language": "fr",
+      "query": "Je souhaite comparer les formations disponibles avant de faire mon choix. Pouvez-vous m'aider ?",
+      "expected_behavior": "Présenter une comparaison basée sur les informations disponibles, notamment les spécialités et les caractéristiques des formations.",
+      "evaluation_criteria": [
+        "Qualité de la comparaison",
+        "Exactitude des informations",
+        "Neutralité des recommandations"
+      ]
+    },
+    {
+      "id": "ORI-004",
+      "category": "orientation",
+      "language": "fr",
+      "query": "Je ne sais pas encore quelle formation choisir. Comment pouvez-vous m'orienter ?",
+      "expected_behavior": "Engager un échange pour identifier les intérêts, le parcours académique et les objectifs du candidat.",
+      "evaluation_criteria": [
+        "Qualité des questions posées",
+        "Personnalisation de l'accompagnement",
+        "Clarté des propositions"
+      ]
+    },
+    {
+      "id": "REF-001",
+      "category": "reformulation",
+      "group_id": "admission_documents",
+      "language": "fr",
+      "query": "Quels documents dois-je fournir pour m'inscrire ?",
+      "expected_behavior": "Comprendre que la question porte sur les pièces nécessaires à la candidature.",
+      "evaluation_criteria": [
+        "Identification de l'intention",
+        "Cohérence avec les autres reformulations du groupe"
+      ]
+    },
+    {
+      "id": "REF-002",
+      "category": "reformulation",
+      "group_id": "admission_documents",
+      "language": "fr",
+      "query": "Quelles sont les pièces à fournir pour constituer mon dossier ?",
+      "expected_behavior": "Identifier la même intention que REF-001 et fournir une réponse cohérente.",
+      "evaluation_criteria": [
+        "Conservation de l'intention",
+        "Cohérence de la réponse"
+      ]
+    },
+    {
+      "id": "REF-003",
+      "category": "reformulation",
+      "group_id": "admission_documents",
+      "language": "fr",
+      "query": "De quels justificatifs ai-je besoin pour déposer ma candidature ?",
+      "expected_behavior": "Reconnaître la même demande concernant les documents de candidature.",
+      "evaluation_criteria": [
+        "Compréhension de la reformulation",
+        "Cohérence de la réponse"
+      ]
+    },
+    {
+      "id": "REF-004",
+      "category": "reformulation",
+      "language": "fr",
+      "group_id": "admission_fees",
+      "query": "Combien coûte cette formation ?",
+      "expected_behavior": "Identifier une demande concernant les frais de scolarité.",
+      "evaluation_criteria": [
+        "Identification de l'intention",
+        "Exactitude des tarifs communiqués"
+      ]
+    },
+    {
+      "id": "REF-005",
+      "category": "reformulation",
+      "language": "fr",
+      "group_id": "admission_fees",
+      "query": "Quels sont les frais de scolarité à prévoir ?",
+      "expected_behavior": "Reconnaître la même intention que REF-004.",
+      "evaluation_criteria": [
+        "Conservation de l'intention",
+        "Cohérence de la réponse"
+      ]
+    },
+    {
+      "id": "REF-006",
+      "category": "reformulation",
+      "language": "fr",
+      "group_id": "admission_fees",
+      "query": "Quel budget faut-il prévoir pour cette formation ?",
+      "expected_behavior": "Comprendre que le candidat demande le coût de la formation et vérifier les tarifs disponibles.",
+      "evaluation_criteria": [
+        "Compréhension du vocabulaire différent",
+        "Exactitude de la réponse"
+      ]
+    },
+    {
+      "id": "AMB-001",
+      "category": "ambiguous",
+      "language": "fr",
+      "query": "C'est combien ?",
+      "expected_behavior": "Demander ce que le candidat souhaite connaître : frais de scolarité, inscription ou autre information.",
+      "evaluation_criteria": [
+        "Détection de l'ambiguïté",
+        "Pertinence de la clarification",
+        "Absence de supposition"
+      ]
+    },
+    {
+      "id": "AMB-002",
+      "category": "ambiguous",
+      "language": "fr",
+      "query": "Est-ce que je peux y accéder ?",
+      "expected_behavior": "Demander quelle formation est concernée et connaître le parcours académique du candidat.",
+      "evaluation_criteria": [
+        "Identification du contexte manquant",
+        "Qualité de la clarification"
+      ]
+    },
+    {
+      "id": "AMB-003",
+      "category": "ambiguous",
+      "language": "fr",
+      "query": "Quelle est la meilleure formation ?",
+      "expected_behavior": "Demander les intérêts, les objectifs et les critères de choix du candidat avant de recommander une formation.",
+      "evaluation_criteria": [
+        "Absence de recommandation arbitraire",
+        "Personnalisation des questions",
+        "Pertinence de l'orientation"
+      ]
+    },
+    {
+      "id": "AMB-004",
+      "category": "ambiguous",
+      "language": "fr",
+      "query": "Je veux m'inscrire. Comment faire ?",
+      "expected_behavior": "Expliquer les étapes générales disponibles et demander quelle formation intéresse le candidat si nécessaire.",
+      "evaluation_criteria": [
+        "Compréhension de l'intention",
+        "Clarté des étapes",
+        "Demande de précisions pertinentes"
+      ]
+    }
+  ]
+}

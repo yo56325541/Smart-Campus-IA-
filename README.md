@@ -60,6 +60,12 @@ Appliquez les migrations vers la version la plus récente :
 python -m alembic upgrade head
 ```
 
+### Étape 4b : Peuplement des données officielles (SA-14, SA-18)
+Pour initialiser le catalogue complet (32 filières officielles IIT et ISB, 45 spécialités, conditions d'admission, tarifs réels et synchronisation des 41 documents RAG) :
+```powershell
+python -m db.seed
+```
+
 Pour revenir en arrière (rollback) si nécessaire :
 ```powershell
 python -m alembic downgrade base
@@ -80,7 +86,7 @@ python -m uvicorn app.main:app --reload --port 8000
 Les tests s'exécutent sur la base PostgreSQL dédiée `smartcampus_test` :
 
 ```powershell
-# Exécution complète de la suite de tests (32 tests)
+# Exécution complète de la suite de tests (42 tests - 100% passants)
 $env:TEST_DATABASE_URL="postgresql+psycopg://smartcampus:smartcampus@127.0.0.1:5433/smartcampus_test"
 python -m pytest -v
 
@@ -109,9 +115,24 @@ La suite de tests couvre :
 - **Immuabilité** : Une session déjà liée à un candidat ne peut jamais être réassignée à un autre compte (conflit `409`). L'appel répété par le même candidat est idempotent (`200`).
 - **Cohérence session / conversation** : Il est impossible qu'une conversation appartienne à un candidat tandis que sa session visiteur resterait orpheline. L'accès aux conversations liées par un visiteur anonyme ou un tiers est strictement refusé.
 
-### B. Authentification & Rôles
+### B. Authentification & Rôles Métier (Projet IA Générative 2026-2027)
 - **Rôle authoritative** : Le rôle de l'utilisateur n'est jamais déduit du token JWT. Il est systématiquement relu en base de données pour chaque requête protégée.
 - **Argon2id** : Hachage sécurisé des mots de passe avec vérification automatique de l'opportunité de rehash (`check_needs_rehash`) lors d'une authentification réussie si les paramètres de sécurité sont modifiés.
+- **Matrice des Rôles Spécifiques** :
+  1. `responsable_academique_iit` : Supervise les informations et recommandations concernant les formations IIT, vérifie la cohérence de l'orientation, consulte les résultats QCM, valide les recommandations et gère les programmes IIT.
+  2. `responsable_academique_isb` : Supervise les informations et recommandations concernant les formations ISB, vérifie la cohérence de l'orientation, consulte les résultats QCM, valide les recommandations et gère les programmes ISB.
+  3. `responsable_entretien` : Organise et réalise les entretiens des candidats préinscrits, consulte les QCM et profils, valide les créneaux, saisit les résultats et notes du jury.
+  4. `direction` : Supervise globalement le processus d'orientation, de préinscription et de conversion (entonnoir de conversion, comparatif IIT vs ISB, formations les plus demandées, dossiers en attente).
+  5. `admin` : Supervise et administre l'ensemble du système et des utilisateurs.
+  6. `candidat` : Espace candidat, formulaires de candidatures, pièces justificatives et suivi des entretiens.
+
+- **Comptes de Démonstration Pré-alimentés (`Password123!`)** :
+  - `admin@smartcampus.tn` (Admin)
+  - `resp.iit@smartcampus.tn` (Responsable Académique IIT)
+  - `resp.isb@smartcampus.tn` (Responsable Académique ISB)
+  - `resp.entretien@smartcampus.tn` (Responsable Entretiens)
+  - `direction@smartcampus.tn` (Direction Générale)
+  - `candidat.demo@smartcampus.tn` (Candidat démo)
 
 ### C. Rate Limiting & Anti Brute-Force
 - Limiteur glissant protégeant contre le password spraying et les attaques distribuées sur un compte cible.
@@ -153,9 +174,40 @@ La suite de tests couvre :
 | `PATCH` | `/tariffs/{id}` | Admin | Mise à jour d'un tarif |
 | `DELETE` | `/tariffs/{id}` | Admin | Suppression d'un tarif |
 | `GET` | `/admin/users` | Admin | Liste paginée des utilisateurs (`limit`, `offset`) |
-| `POST` | `/admin/users` | Admin | Création d'un utilisateur par un admin |
+| `POST` | `/admin/users` | Admin | Création d'un utilisateur par un admin (avec n'importe quel rôle) |
 | `PATCH` | `/admin/users/{id}` | Admin | Activation/désactivation (protection dernier admin) |
+| `GET` | `/admin/roles` | Admin | Liste exhaustive des rôles système, descriptions et permissions |
+| `GET` | `/dashboard/stats` | Direction / Admin / Responsables | Tableau de bord décisionnel (KPI, entonnoir, comparatif IIT/ISB) |
 | `POST` | `/admin/cleanup-sessions` | Admin | Purge des sessions anonymes expirées |
+| `POST` | `/conversations/{id}/messages` | Propriétaire | Envoie un message et génère la réponse LLM (mémoire conversationnelle) |
+| `GET` | `/conversations/{id}/messages` | Propriétaire | Consulte l'historique complet des messages de la conversation |
+| `POST` | `/applications` | Candidat | Dépôt d'un dossier de candidature pour un programme |
+| `GET` | `/applications` | Candidat / Staff | Liste des candidatures (filtrée par candidat, ou par établissement IIT/ISB) |
+| `GET` | `/applications/{id}` | Candidat / Staff | Consultation du détail d'un dossier de candidature |
+| `PATCH` | `/applications/{id}` | Candidat / Admin | Mise à jour des notes d'une candidature |
+| `PATCH` | `/applications/{id}/status` | Admin / Direction / Responsable | Validation/refus ou mise à jour de statut d'une candidature |
+| `POST` | `/applications/{id}/documents` | Candidat | Dépôt d'un document justificatif (diplôme, CIN, etc.) |
+| `GET` | `/applications/{id}/documents` | Candidat / Staff | Liste des documents d'une candidature |
+| `PATCH` | `/documents/{id}/verify` | Admin / Resp. Académique | Validation de conformité d'une pièce justificative |
+| `GET` | `/programs/{slug}/specialties` | Public | Liste des spécialités rattachées à une formation |
+| `POST` | `/programs/{slug}/specialties` | Admin / Resp. Académique | Ajout d'une spécialité |
+| `GET` | `/programs/{slug}/courses` | Public | Liste des matières enseignées (filtres semestre/spécialité) |
+| `POST` | `/programs/{slug}/courses` | Admin / Resp. Académique | Ajout d'une matière enseignée |
+| `GET` | `/users/me/academic-profile` | Candidat | Consultation de son profil académique détaillé |
+| `POST` | `/users/me/academic-profile` | Candidat | Création ou mise à jour du profil académique |
+| `POST` | `/equivalences` | Candidat | Dépôt d'une demande d'équivalence de diplôme |
+| `GET` | `/equivalences` | Candidat / Staff | Liste des demandes d'équivalence |
+| `PATCH` | `/equivalences/{id}/review` | Admin / Resp. Académique | Décision et validation d'une demande d'équivalence selon l'institution |
+| `POST` | `/applications/{id}/interview` | Admin / Resp. Entretien | Programmation d'un rendez-vous d'entretien |
+| `GET` | `/applications/{id}/interview` | Candidat / Staff | Consultation du rendez-vous d'entretien |
+| `POST` | `/applications/{id}/interview/result` | Admin / Resp. Entretien | Enregistrement de l'évaluation et des notes du jury |
+| `GET` | `/applications/{id}/interview/result` | Candidat / Staff | Consultation des résultats de l'entretien |
+| `POST` | `/documents/{id}/versions` | Propriétaire | Dépôt d'une nouvelle version d'un document révisé |
+| `GET` | `/documents/{id}/versions` | Propriétaire / Admin | Historique des versions d'un document |
+| `POST` | `/documents/{id}/vector-sync` | Admin | Déclenchement du traitement automatique de vectorisation (RAG) |
+| `GET` | `/admin/vector-sync-tasks` | Admin | Journal des traitements vectoriels de la base documentaire |
+| `GET` | `/admin/sync-logs` | Admin | Journal de synchronisation et d'audit des données |
+| `POST` | `/admin/sync-catalog` | Admin | Déclenchement de la synchronisation / seeding du catalogue |
 
 ---
 

@@ -2,11 +2,14 @@ import re
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import ClassVar, Generic, List, Optional, TypeVar
+from typing import Any, ClassVar, Dict, Generic, List, Optional, TypeVar
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
-from .models import ApplicationStatus, Institution, Role
+from .models import (ApplicationStatus, DocumentType, EquivalenceStatus,
+                    Institution, InterviewStatus, InterviewType,
+                    JuryDecision, MessageRole, Role, SyncStatus,
+                    VectorSyncAction, VectorSyncStatus)
 
 
 class ORM(BaseModel):
@@ -55,6 +58,14 @@ class UserOut(ORM):
     created_at: Optional[datetime] = None
 
 
+class RoleInfoOut(BaseModel):
+    code: Role
+    title: str
+    description: str
+    institution: Optional[Institution] = None
+    permissions: list[str]
+
+
 class TokenOut(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -97,6 +108,32 @@ class ConversationOut(ORM):
     session_id: uuid.UUID
     user_id: Optional[uuid.UUID]
     created_at: datetime
+
+
+# ---------- Messages & LLM Dialogue (SA-26, SA-36, SA-38) ----------
+class MessageIn(BaseModel):
+    content: str = Field(min_length=1, max_length=5000)
+
+    @field_validator("content")
+    @classmethod
+    def _clean_content(cls, v: str) -> str:
+        cleaned = v.strip()
+        if not cleaned:
+            raise ValueError("Le message ne peut être vide.")
+        return cleaned
+
+
+class MessageOut(ORM):
+    id: uuid.UUID
+    conversation_id: uuid.UUID
+    role: MessageRole
+    content: str
+    created_at: datetime
+
+
+class ChatResponse(BaseModel):
+    user_message: MessageOut
+    assistant_message: MessageOut
 
 
 class LinkOut(BaseModel):
@@ -240,6 +277,36 @@ class ProgramUpdate(PatchModel):
         return v
 
 
+# ---------- Spécialités & Matières (SA-12) ----------
+class SpecialtyIn(BaseModel):
+    name: str = Field(min_length=1, max_length=150)
+    code: str = Field(min_length=1, max_length=50)
+    description: str = ""
+    is_active: bool = True
+
+
+class SpecialtyOut(ORM, SpecialtyIn):
+    id: uuid.UUID
+    program_id: uuid.UUID
+
+
+class CourseIn(BaseModel):
+    code: str = Field(min_length=1, max_length=30)
+    name: str = Field(min_length=1, max_length=200)
+    semester: str = Field(min_length=2, max_length=10)
+    credits_ects: Decimal = Field(default=Decimal("3.0"), ge=0, max_digits=4, decimal_places=1)
+    coefficient: Decimal = Field(default=Decimal("1.50"), ge=0, max_digits=4, decimal_places=2)
+    hours_lectures: int = Field(default=21, ge=0)
+    hours_tutorials: int = Field(default=21, ge=0)
+    description: str = ""
+    specialty_id: Optional[uuid.UUID] = None
+
+
+class CourseOut(ORM, CourseIn):
+    id: uuid.UUID
+    program_id: uuid.UUID
+
+
 class ProgramOut(ORM, ProgramIn):
     id: uuid.UUID
 
@@ -247,15 +314,15 @@ class ProgramOut(ORM, ProgramIn):
 class ProgramDetail(ProgramOut):
     conditions: list[ConditionOut] = []
     tariffs: list[TariffOut] = []
+    specialties: list[SpecialtyOut] = []
+    courses: list[CourseOut] = []
 
 
 # ---------- Candidatures (SA-13) ----------
-
 class ApplicationIn(BaseModel):
-    """Dépôt d'une candidature par un candidat."""
     program_id: uuid.UUID
     academic_year: str = Field(pattern=r"^\d{4}-\d{4}$")
-    notes: Optional[str] = Field(default=None, max_length=2000)
+    notes: str = Field(default="", max_length=1000)
 
     @field_validator("academic_year")
     @classmethod
@@ -263,10 +330,13 @@ class ApplicationIn(BaseModel):
         return validate_academic_year(v)
 
 
-class ApplicationStatusIn(BaseModel):
-    """Mise à jour du statut d'une candidature (réservé admin)."""
+class ApplicationUpdate(PatchModel):
+    nullable_fields: ClassVar[frozenset[str]] = frozenset({"notes"})
+    notes: Optional[str] = Field(default=None, max_length=1000)
+
+
+class ApplicationStatusUpdate(BaseModel):
     status: ApplicationStatus
-    notes: Optional[str] = Field(default=None, max_length=2000)
 
 
 class ApplicationOut(ORM):
@@ -275,14 +345,291 @@ class ApplicationOut(ORM):
     program_id: uuid.UUID
     academic_year: str
     status: ApplicationStatus
-    notes: Optional[str]
+    notes: str
     created_at: datetime
     updated_at: datetime
 
 
-class ApplicationDetail(ApplicationOut):
-    """Vue enrichie avec le résumé de la formation et de l'utilisateur."""
-    program_name: Optional[str] = None
-    program_slug: Optional[str] = None
-    applicant_email: Optional[str] = None
-    applicant_name: Optional[str] = None
+# ---------- Documents & Synchronisation (SA-14) ----------
+class DocumentIn(BaseModel):
+    document_type: DocumentType = DocumentType.autre
+    filename: str = Field(min_length=1, max_length=255)
+    file_path: str = Field(default="", max_length=500)
+    mime_type: str = Field(default="application/octet-stream", max_length=100)
+    file_size: int = Field(default=0, ge=0)
+
+
+class DocumentOut(ORM):
+    id: uuid.UUID
+    application_id: Optional[uuid.UUID]
+    user_id: Optional[uuid.UUID]
+    document_type: DocumentType
+    filename: str
+    file_path: str
+    mime_type: str
+    file_size: int
+    current_version: int = 1
+    is_verified: bool
+    created_at: datetime
+
+
+class DocumentVersionIn(BaseModel):
+    file_path: str = Field(min_length=1, max_length=500)
+    file_size: int = Field(default=0, ge=0)
+    change_summary: str = Field(default="Nouvelle version", max_length=255)
+
+
+class DocumentVersionOut(ORM, DocumentVersionIn):
+    id: uuid.UUID
+    document_id: uuid.UUID
+    version_number: int
+    created_at: datetime
+
+
+class VectorSyncTaskIn(BaseModel):
+    document_id: Optional[uuid.UUID] = None
+    action: VectorSyncAction = VectorSyncAction.upsert
+    embedding_model: str = Field(default="text-embedding-3-small", max_length=100)
+    collection_name: str = Field(default="smartcampus_documents", max_length=100)
+
+
+class VectorSyncTaskOut(ORM):
+    id: uuid.UUID
+    document_id: Optional[uuid.UUID]
+    action: VectorSyncAction
+    status: VectorSyncStatus
+    embedding_model: str
+    collection_name: str
+    chunk_count: int
+    vector_dimensions: int
+    error_message: Optional[str]
+    created_at: datetime
+    processed_at: Optional[datetime]
+
+
+class SyncLogOut(ORM):
+    id: uuid.UUID
+    entity_type: str
+    status: SyncStatus
+    records_synced: int
+    error_message: Optional[str]
+    started_at: datetime
+    completed_at: Optional[datetime]
+
+
+# ---------- Profils académiques, Équivalences & Entretiens (SA-13) ----------
+class AcademicProfileIn(BaseModel):
+    bac_section: str = Field(default="", max_length=100)
+    bac_year: Optional[int] = Field(default=None, ge=1970, le=2100)
+    bac_average: Optional[Decimal] = Field(default=None, ge=0, le=20, max_digits=4, decimal_places=2)
+    highest_diploma: str = Field(default="", max_length=150)
+    graduation_institution: str = Field(default="", max_length=200)
+    graduation_year: Optional[int] = Field(default=None, ge=1970, le=2100)
+    notes: str = Field(default="", max_length=2000)
+
+
+class AcademicProfileOut(ORM, AcademicProfileIn):
+    id: uuid.UUID
+    user_id: uuid.UUID
+    created_at: datetime
+    updated_at: datetime
+
+
+class EquivalenceIn(BaseModel):
+    target_program_id: uuid.UUID
+    source_diploma: str = Field(min_length=2, max_length=200)
+    source_institution: str = Field(min_length=2, max_length=200)
+    source_country: str = Field(default="Tunisie", max_length=100)
+    requested_level: str = Field(min_length=1, max_length=50)
+
+
+class EquivalenceReviewIn(BaseModel):
+    status: EquivalenceStatus
+    decision_notes: str = Field(default="", max_length=1000)
+
+
+class EquivalenceOut(ORM):
+    id: uuid.UUID
+    user_id: uuid.UUID
+    target_program_id: uuid.UUID
+    source_diploma: str
+    source_institution: str
+    source_country: str
+    requested_level: str
+    status: EquivalenceStatus
+    decision_notes: str
+    reviewed_by: Optional[uuid.UUID]
+    created_at: datetime
+    updated_at: datetime
+
+
+class InterviewIn(BaseModel):
+    scheduled_at: datetime
+    duration_minutes: int = Field(default=30, ge=10, le=180)
+    interview_type: InterviewType = InterviewType.en_ligne
+    location_or_link: str = Field(default="", max_length=300)
+    notes: str = Field(default="", max_length=1000)
+
+
+class InterviewStatusUpdate(BaseModel):
+    status: InterviewStatus
+
+
+class InterviewOut(ORM, InterviewIn):
+    id: uuid.UUID
+    application_id: uuid.UUID
+    status: InterviewStatus
+    interviewer_id: Optional[uuid.UUID]
+    created_at: datetime
+
+
+class InterviewResultIn(BaseModel):
+    technical_score: Optional[Decimal] = Field(default=None, ge=0, le=20, max_digits=4, decimal_places=2)
+    motivation_score: Optional[Decimal] = Field(default=None, ge=0, le=20, max_digits=4, decimal_places=2)
+    language_score: Optional[Decimal] = Field(default=None, ge=0, le=20, max_digits=4, decimal_places=2)
+    decision: JuryDecision = JuryDecision.favorable
+    jury_feedback: str = Field(default="", max_length=2000)
+
+
+class InterviewResultOut(ORM, InterviewResultIn):
+    id: uuid.UUID
+    interview_id: uuid.UUID
+    application_id: uuid.UUID
+    overall_score: Optional[Decimal]
+    evaluated_at: datetime
+
+
+# =====================================================================
+# LLM Local Gemma (Ollama) & Benchmark SA-32 Schemas
+# =====================================================================
+
+class LLMMessage(BaseModel):
+    role: str = Field(description="Rôle de l'interlocuteur ('system', 'user', 'assistant')")
+    content: str = Field(description="Contenu textuel du message")
+
+
+class LLMQueryRequest(BaseModel):
+    query: str = Field(min_length=1, max_length=5000, description="Question ou message de l'utilisateur")
+    conversation_id: Optional[uuid.UUID] = Field(default=None, description="Identifiant optionnel de conversation pour charger la mémoire temporaire (US-006)")
+    system_prompt: Optional[str] = Field(default=None, description="Prompt système personnalisé optionnel")
+    temperature: Optional[float] = Field(default=None, ge=0.0, le=2.0, description="Température de génération")
+    top_p: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="Échantillonnage top_p")
+    max_tokens: Optional[int] = Field(default=None, ge=1, le=4096, description="Nombre maximal de jetons générés")
+    inject_academic_context: bool = Field(default=True, description="Injecter automatiquement le contexte académique RAG")
+    conversation_history: Optional[List[LLMMessage]] = Field(default=None, description="Historique préalable de la conversation")
+
+    @field_validator("query")
+    @classmethod
+    def _clean_query(cls, v: str) -> str:
+        cleaned = v.strip()
+        if not cleaned:
+            raise ValueError("La requête ne peut pas être vide.")
+        return cleaned
+
+
+class LLMQueryResponse(BaseModel):
+    response: str
+    model: str
+    latency_ms: float
+    fallback_used: bool = False
+    sources_cited: List[str] = Field(default_factory=list)
+    status: str = "success"
+
+
+class LLMHealthResponse(BaseModel):
+    status: str
+    ollama_url: str
+    configured_model: str
+    model_available: bool
+    available_models: List[str]
+    latency_ms: Optional[float] = None
+    version: Optional[str] = None
+
+
+class LLMModelItem(BaseModel):
+    name: str
+    size_bytes: Optional[int] = None
+    modified_at: Optional[str] = None
+
+
+class LLMEvalQuestionOut(BaseModel):
+    id: str
+    category: str
+    language: str
+    query: str
+    expected_behavior: str
+    evaluation_criteria: List[str]
+    group_id: Optional[str] = None
+
+
+class LLMEvalResultItem(BaseModel):
+    id: str
+    category: str
+    query: str
+    response: str
+    expected_behavior: str
+    evaluation_criteria: List[str]
+    criteria_met: bool
+    criteria_feedback: List[str]
+    latency_ms: float
+    fallback_used: bool = False
+
+
+class LLMEvalSummary(BaseModel):
+    total_questions: int
+    evaluated_questions: int
+    passed_count: int
+    success_rate_percent: float
+    categories: Dict[str, Dict[str, Any]]
+    total_duration_seconds: float
+    results: List[LLMEvalResultItem]
+
+
+# =====================================================================
+# Dashboard & Statistiques Direction / Responsables Académiques
+# =====================================================================
+
+class FunnelStats(BaseModel):
+    visitors_sessions: int
+    conversations: int
+    orientations_advised: int
+    preinscriptions_submitted: int
+    interviews_scheduled: int
+    interviews_completed: int
+    inscriptions_accepted: int
+    conversion_rate_preinscription_pct: float
+    conversion_rate_interview_pct: float
+    conversion_rate_inscription_pct: float
+
+
+class ProgramDemandItem(BaseModel):
+    program_id: uuid.UUID
+    slug: str
+    name: str
+    institution: Institution
+    level: str
+    applications_count: int
+
+
+class InstitutionStats(BaseModel):
+    total_programs: int
+    total_applications: int
+    submitted_applications: int
+    accepted_applications: int
+
+
+class DashboardStatsOut(BaseModel):
+    scope: str
+    institution_filter: Optional[Institution] = None
+    total_users: int
+    total_conversations: int
+    total_messages: int
+    funnel: FunnelStats
+    applications_by_status: dict[str, int]
+    interviews_by_status: dict[str, int]
+    decisions_by_type: dict[str, int]
+    comparative_iit_vs_isb: dict[str, InstitutionStats]
+    most_demanded_programs: list[ProgramDemandItem]
+    pending_or_abandoned_dossiers_count: int
+
+

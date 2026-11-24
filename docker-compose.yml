@@ -1,0 +1,40 @@
+services:
+  # ============================================================================
+  # SmartCampus AI - Backend API
+  # NOTE IMPORTANTE : La base de données PostgreSQL N'EST PAS conteneurisée.
+  # Elle s'exécute nativement sur la machine hôte (port 5433).
+  # ============================================================================
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: smartcampus_backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=production
+      # Connexion à l'instance PostgreSQL native sur l'hôte (port 5433)
+      - DATABASE_URL=postgresql+psycopg://smartcampus:smartcampus@host.docker.internal:5433/smartcampus?connect_timeout=5
+      - REDIS_URL=redis://redis:6379/0
+      - JWT_SECRET=${JWT_SECRET}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - CORS_ORIGINS=${CORS_ORIGINS:-["http://localhost:3000"]}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # Redis (Optionnel / Recommandé en multi-workers pour le rate limiting distribué)
+  redis:
+    image: redis:7-alpine
+    container_name: smartcampus_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3

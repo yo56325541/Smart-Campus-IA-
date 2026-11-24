@@ -48,6 +48,17 @@ class Settings(BaseSettings):
     # Proxies de confiance pour la résolution sécurisée des IP clientes (ex: reverse proxy nginx)
     trusted_proxies: List[str] = ["127.0.0.1", "::1"]
 
+    # ---- Configuration LLM Local (Ollama - Modèle Gemma) ----
+    ollama_base_url: str = "http://127.0.0.1:11434"
+    ollama_model: str = "gemma3:1b"
+    ollama_timeout_seconds: float = 60.0
+    ollama_temperature: float = 0.2
+    ollama_top_p: float = 0.9
+    ollama_max_tokens: int = 1024
+    ollama_api_key: Optional[str] = None  # Clé API si Ollama est protégé par reverse proxy
+    llm_service_api_key: Optional[str] = None  # Clé secrète d'accès à l'API LLM (/llm)
+    llm_fallback_enabled: bool = True  # Repli automatique vers corpus RAG si Ollama est indisponible ou timeout
+
     @field_validator("environment", mode="before")
     @classmethod
     def _validate_environment(cls, v: str) -> str:

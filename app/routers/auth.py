@@ -8,8 +8,8 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..database import get_db
 from ..deps import get_current_user, get_optional_session
-from ..models import Role, User, VisitorSession
-from ..schemas import LoginIn, RegisterIn, TokenOut, UserOut
+from ..models import ROLE_METADATA, Role, User, VisitorSession
+from ..schemas import LoginIn, RegisterIn, RoleInfoOut, TokenOut, UserOut
 from ..security import create_access_token, hash_password, needs_rehash, verify_password
 from ..services import (SessionOwnedError, get_client_ip, link_session_to_user,
                          login_limiter)
@@ -191,3 +191,18 @@ def login_form(
 def me(user: User = Depends(get_current_user)):
     """Retourne les informations du profil utilisateur authentifié."""
     return user
+
+
+@router.get("/roles", response_model=list[RoleInfoOut])
+def get_public_roles():
+    """Consulte la liste publique des rôles disponibles et leurs prérogatives."""
+    return [
+        RoleInfoOut(
+            code=r,
+            title=meta["title"],
+            description=meta["description"],
+            institution=meta.get("institution"),
+            permissions=meta["permissions"]
+        )
+        for r, meta in ROLE_METADATA.items()
+    ]

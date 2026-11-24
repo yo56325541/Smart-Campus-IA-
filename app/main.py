@@ -13,7 +13,7 @@ from .config import settings
 from .database import Base, SessionLocal, engine
 from .deps import require_admin
 from .models import User
-from .routers import admin, applications, auth, conversations, programs, sessions
+from .routers import admin, applications, auth, conversations, dashboard, llm, programs, sessions
 from .services import bootstrap_admin, cleanup_expired_sessions
 
 logging.basicConfig(
@@ -105,8 +105,7 @@ async def sqlalchemy_error_handler(request: Request, exc: SQLAlchemyError):
 
 
 # Enregistrement des routeurs
-for r in (auth.router, sessions.router, conversations.router,
-          programs.router, applications.router, admin.router):
+for r in (auth.router, sessions.router, conversations.router, programs.router, admin.router, admin.roles_router, applications.router, dashboard.router, llm.router):
     app.include_router(r)
 
 

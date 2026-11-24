@@ -6,9 +6,11 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..deps import get_optional_session, get_optional_user, get_session
-from ..models import Conversation, Role, User, VisitorSession
-from ..schemas import ConversationIn, ConversationOut
+from ..models import Conversation, Message, MessageRole, Role, User, VisitorSession
+from ..schemas import (ChatResponse, ConversationIn, ConversationOut,
+                       MessageIn, MessageOut)
 from ..services import link_session_to_user
+from ..services_llm import LLMConnectionError, LLMTimeoutError, llm_connector
 
 router = APIRouter(prefix="/conversations", tags=["Conversations"])
 
@@ -127,3 +129,95 @@ def get_conversation(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Conversation introuvable")
 
     return conv
+
+
+# =====================================================================
+# SA-26 & SA-36 : Dialogue LLM et Mémoire Conversationnelle
+# =====================================================================
+
+@router.post("/{conversation_id}/messages", response_model=ChatResponse, status_code=status.HTTP_201_CREATED)
+def send_message(
+    conversation_id: uuid.UUID,
+    body: MessageIn,
+    vs: VisitorSession | None = Depends(get_optional_session),
+    user: User | None = Depends(get_optional_user),
+    db: Session = Depends(get_db)
+):
+    """Envoie un message utilisateur dans la conversation et génère la réponse du LLM (SA-36).
+    Enregistre les messages dans la mémoire conversationnelle (SA-26).
+    """
+    _check_consistent(vs, user)
+    conv = db.get(Conversation, conversation_id)
+    if not conv:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Conversation introuvable")
+
+    # Vérification des droits d'accès
+    is_owner = False
+    if user and conv.user_id == user.id:
+        is_owner = True
+    elif not user and vs and conv.session_id == vs.id and conv.user_id is None and vs.user_id is None:
+        is_owner = True
+
+    if not is_owner:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Conversation introuvable")
+
+    # 1. Enregistrer le message de l'utilisateur
+    user_msg = Message(
+        conversation_id=conv.id,
+        role=MessageRole.user,
+        content=body.content
+    )
+    db.add(user_msg)
+
+    # Si la conversation n'a pas de titre, lui donner les 50 premiers caractères du message
+    if not conv.title or conv.title.strip() == "":
+        conv.title = body.content[:50].strip()
+
+    db.commit()
+    db.refresh(user_msg)
+
+    # 2. Générer la réponse du LLM en injectant le contexte et la mémoire (SA-36)
+    try:
+        assistant_reply_text = llm_connector.generate_reply(db, conv, body.content)
+    except LLMConnectionError as exc:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail=exc.message)
+    except LLMTimeoutError as exc:
+        raise HTTPException(status.HTTP_504_GATEWAY_TIMEOUT, detail=exc.message)
+
+    # 3. Enregistrer la réponse de l'assistant dans la mémoire
+    assistant_msg = Message(
+        conversation_id=conv.id,
+        role=MessageRole.assistant,
+        content=assistant_reply_text
+    )
+    db.add(assistant_msg)
+    db.commit()
+    db.refresh(assistant_msg)
+
+    return ChatResponse(user_message=user_msg, assistant_message=assistant_msg)
+
+
+@router.get("/{conversation_id}/messages", response_model=list[MessageOut])
+def list_messages(
+    conversation_id: uuid.UUID,
+    vs: VisitorSession | None = Depends(get_optional_session),
+    user: User | None = Depends(get_optional_user),
+    db: Session = Depends(get_db)
+):
+    """Consulte l'historique complet des messages de la conversation (mémoire conversationnelle)."""
+    _check_consistent(vs, user)
+    conv = db.get(Conversation, conversation_id)
+    if not conv:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Conversation introuvable")
+
+    is_owner = False
+    if user and conv.user_id == user.id:
+        is_owner = True
+    elif not user and vs and conv.session_id == vs.id and conv.user_id is None and vs.user_id is None:
+        is_owner = True
+
+    if not is_owner:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Conversation introuvable")
+
+    stmt = select(Message).where(Message.conversation_id == conv.id).order_by(Message.created_at.asc())
+    return db.scalars(stmt).all()

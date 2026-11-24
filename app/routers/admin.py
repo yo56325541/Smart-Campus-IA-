@@ -8,13 +8,35 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..deps import require_admin
-from ..models import Role, User
-from ..schemas import AdminCreateUserIn, UserActiveIn, UserOut
+from ..models import ROLE_METADATA, Role, User
+from ..schemas import AdminCreateUserIn, RoleInfoOut, UserActiveIn, UserOut
 from ..security import hash_password
 
 logger = logging.getLogger("smartcampus.admin")
 
 router = APIRouter(prefix="/admin/users", tags=["Admin – utilisateurs"], dependencies=[Depends(require_admin)])
+roles_router = APIRouter(prefix="/admin/roles", tags=["Admin – rôles"], dependencies=[Depends(require_admin)])
+
+
+@roles_router.get("", response_model=list[RoleInfoOut])
+def get_system_roles():
+    """Liste exhaustive des rôles et prérogatives du système SmartCampus AI."""
+    return [
+        RoleInfoOut(
+            code=r,
+            title=meta["title"],
+            description=meta["description"],
+            institution=meta.get("institution"),
+            permissions=meta["permissions"]
+        )
+        for r, meta in ROLE_METADATA.items()
+    ]
+
+
+@router.get("/available-roles", response_model=list[RoleInfoOut])
+def get_available_roles():
+    """Alias pour obtenir la liste des rôles dans le contexte de gestion des utilisateurs."""
+    return get_system_roles()
 
 
 @router.get("", response_model=list[UserOut])

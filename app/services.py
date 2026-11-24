@@ -36,6 +36,7 @@ def link_session_to_user(db: Session, vs: VisitorSession, user: User) -> int:
         select(VisitorSession)
         .where(VisitorSession.id == vs.id)
         .with_for_update()
+        .execution_options(populate_existing=True)
     )
     if not locked_vs:
         return 0
